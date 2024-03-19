@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Recorder</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        h1 {
+            margin-top: 20px;
+            color: #333;
+        }
+
+        #scoreContainer {
+            margin-top: 20px;
+            background-color: #fff;
+            padding: 10px 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        #questionContainer {
+            margin-top: 20px;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            max-width: 500px;
+            width: 100%;
+        }
+
+        #recordContainer {
+            margin-top: 20px;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            max-width: 500px;
+            width: 100%;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            background-color: #007bff;
+            color: #fff;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        #startRecording {
+            margin-right: 10px;
+        }
+
+        #stopRecording {
+            margin-left: 10px;
+        }
+
+        #recordingStatus {
+            font-weight: bold;
+        }
+
+        #audioPlayback {
+            margin-top: 10px;
+            width: 100%;
+        }
+
+        #thankYouMessage {
+            margin-top: 20px;
+            display: none;
+            font-size: 24px;
+            color: green;
+        }
+    </style>
+</head>
+<body>
+    <!-- Your HTML content here -->
+    <h1>Audio Recorder</h1>
+
+    <!-- Display score initially -->
+    <div id="scoreContainer">
+        <h2>Your Score: <span id="score">{{ score }}</span></h2>
+    </div>
+
+    <!-- Display current question -->
+    <div id="questionContainer">
+        <h2>Question <span id="questionNumber">1</span></h2>
+        <p id="questionText"></p>
+    </div>
+    
+    <!-- Record answer -->
+    <div id="recordContainer">
+        <button id="startRecording">Start Recording</button>
+        <button id="stopRecording" disabled>Stop Recording</button>
+        <p id="recordingStatus">Recording status: Not recording</p>
+        <audio id="audioPlayback" controls></audio>
+        <form id="audioForm" method="post" enctype="multipart/form-data" action="/">
+            <!-- Dynamically generate file inputs for each question -->
+            {% for i in range(questions|length) %}
+            <input type="file" id="answer_{{ i }}" name="answer_{{ i }}" accept="audio/*" capture="microphone" style="display:none;">
+            {% endfor %}
+            <input type="hidden" id="currentQuestionIndex" name="currentQuestionIndex" value="0">
+            <input type="submit" id="submitAudio" value="Submit" disabled style="display:none;">
+        </form>
+        
+    </div>
+
+    <!-- Thank you message -->
+    <div id="thankYouMessage" style="display: none;">
+        <h2>Thank You!</h2>
+    </div>
+    <script>
+        let mediaRecorder;
+        let chunks = [];
+        let currentQuestionIndex = 0;
+        let score = parseInt("{{ score }}"); // Ensure score is parsed as an integer
+        const questions = [
+            {% for question in questions %}
+            "{{ question }}",
+            {% endfor %}
+        ];
+
+        const startRecording = () => {
+            navigator.mediaDevices.getUserMedia({ audio: true })
+                .then(stream => {
+                    mediaRecorder = new MediaRecorder(stream);
+                    mediaRecorder.ondataavailable = e => {
+                        chunks.push(e.data);
+                    };
+
+                    mediaRecorder.onstop = () => {
+                        const blob = new Blob(chunks, { type: 'audio/ogg; codecs=opus' });
+                        const audioURL = URL.createObjectURL(blob);
+                        const audioElement = document.getElementById('audioPlayback');
+                        audioElement.src = audioURL;
+                        document.getElementById('audioFile').files = [blob]; // Assign blob to file input
+                        document.getElementById('submitAudio').disabled = false; // Enable submit button
+                    };
+
+                    mediaRecorder.start();
+                    document.getElementById('startRecording').disabled = true;
+                    document.getElementById('stopRecording').disabled = false;
+                    document.getElementById('recordingStatus').textContent = 'Recording...';
+                })
+                .catch(err => {
+                    console.error('Error accessing microphone:', err);
+                });
+        };
+
+        const stopRecording = () => {
+            mediaRecorder.stop();
+            document.getElementById('startRecording').disabled = false;
+            document.getElementById('stopRecording').disabled = true;
+            document.getElementById('recordingStatus').textContent = 'Not recording';
+            // Send the recorded audio to Flask server
+            const formData = new FormData();
+            formData.append('audio', chunks[0]);
+            formData.append('currentQuestionIndex', currentQuestionIndex);
+            fetch('/', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.text())
+            .then(data => {
+                // Ensure received data is not NaN before updating the score
+                if (!isNaN(parseInt(data))) {
+                    score = parseInt(data);
+                    document.getElementById('score').textContent = score;
+                    if (currentQuestionIndex >= questions.length - 1) {
+                        document.getElementById('recordContainer').style.display = 'none';
+                        document.getElementById('thankYouMessage').style.display = 'block';
+                    }
+                } else {
+                    console.error('Invalid score data received from server');
+                }
+                chunks = [];
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
+        };
+
+        const displayNextQuestion = () => {
+            currentQuestionIndex++;
+            if (currentQuestionIndex < questions.length) {
+                document.getElementById('questionNumber').textContent = currentQuestionIndex + 1;
+                document.getElementById('questionText').textContent = questions[currentQuestionIndex];
+                document.getElementById('recordContainer').style.display = 'block';
+            }
+        };
+
+        document.getElementById('startRecording').addEventListener('click', startRecording);
+        document.getElementById('stopRecording').addEventListener('click', () => {
+            stopRecording();
+            displayNextQuestion();
+        });
+
+        // Display the first question initially
+        document.getElementById('questionText').textContent = questions[currentQuestionIndex];
+        document.getElementById('recordContainer').style.display = 'block';
+    </script>
+</body>
+</html>

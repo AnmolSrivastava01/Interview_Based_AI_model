@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>To-Do List</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f0f0f0;
+    }
+    #app {
+      max-width: 600px;
+      margin: 20px auto;
+      padding: 20px;
+      background-color: #fff;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    }
+    h1, h2 {
+      color: #333;
+    }
+    form {
+      margin-bottom: 20px;
+    }
+    input[type="text"] {
+      width: calc(100% - 80px);
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 16px;
+    }
+    button {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 4px;
+      background-color: #007bff;
+      color: #fff;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    ul {
+      list-style-type: none;
+      padding: 0;
+    }
+    li {
+      padding: 8px;
+      margin-bottom: 8px;
+      background-color: #f9f9f9;
+      border-radius: 4px;
+    }
+    li button {
+      margin-left: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <h1>To-Do List</h1>
+    
+    <!-- Input form for adding tasks -->
+    <form @submit.prevent="addTask">
+      <input type="text" v-model="newTask" placeholder="Enter task...">
+      <button type="submit">Add Task</button>
+    </form>
+
+    <!-- List of open tasks -->
+    <h2>Open Tasks</h2>
+    <ul>
+      <li v-for="(task, index) in openTasks" :key="index">
+        {{ task.name }} - Created on {{ task.date }}
+        <button @click="completeTask(index)">Complete</button>
+        <button @click="removeTask(index)">Remove</button>
+      </li>
+    </ul>
+
+    <!-- Check-off list -->
+    <h2>Check-off List</h2>
+    <ul>
+      <li v-for="(task, index) in completedTasks" :key="index">
+        {{ task.name }} - Completed on {{ task.date }}
+      </li>
+    </ul>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
+  <script>
+    new Vue({
+      el: '#app',
+      data: {
+        newTask: '',
+        openTasks: [],
+        completedTasks: []
+      },
+      created() {
+        // Retrieve tasks from local storage when the page is loaded
+        this.openTasks = JSON.parse(localStorage.getItem('openTasks')) || [];
+        this.completedTasks = JSON.parse(localStorage.getItem('completedTasks')) || [];
+      },
+      methods: {
+        addTask() {
+          // Add a new task to the open tasks list
+          if (this.newTask.trim() !== '') {
+            this.openTasks.push({
+              name: this.newTask,
+              date: new Date().toLocaleString()
+            });
+            this.newTask = '';
+            this.saveTasks();
+          }
+        },
+        completeTask(index) {
+          // Move a task from open tasks to completed tasks
+          const completedTask = this.openTasks.splice(index, 1)[0];
+          completedTask.date = new Date().toLocaleString();
+          this.completedTasks.push(completedTask);
+          this.saveTasks();
+        },
+        removeTask(index) {
+          // Remove a task from the open tasks list
+          this.openTasks.splice(index, 1);
+          this.saveTasks();
+        },
+        saveTasks() {
+          // Save tasks to local storage
+          localStorage.setItem('openTasks', JSON.stringify(this.openTasks));
+          localStorage.setItem('completedTasks', JSON.stringify(this.completedTasks));
+        }
+      }
+    });
+  </script>
+</body>
+</html>
